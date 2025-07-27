@@ -85,25 +85,7 @@
         "maxTokens": 4096,
         "accelerators": "cpu,gpu"
       },
-      "taskTypes": ["llm_chat", "llm_prompt_lab", "function_call"]
-    },
-    {
-      "name": "Gemma3n-E4B q8",
-      "modelId": "litert-community/Gemma3n-E4B-q8",
-      "modelFile": "Gemma3n-E4B_seq128_q8.task",
-      "description": "Gemma3n-E4B model with 8-bit quantization and vision capabilities, ready for deployment on Android using the [MediaPipe LLM Inference API](https://ai.google.dev/edge/mediapipe/solutions/genai/llm_inference). Enhanced vision processing for image understanding tasks.",
-      "sizeInBytes": 4800000000,
-      "estimatedPeakMemoryInBytes": 7516192768,
-      "version": "20250101",
-      "llmSupportImage": true,
-      "defaultConfig": {
-        "topK": 64,
-        "topP": 0.95,
-        "temperature": 1.0,
-        "maxTokens": 4096,
-        "accelerators": "cpu,gpu"
-      },
-      "taskTypes": ["llm_chat", "llm_prompt_lab", "llm_ask_image", "vision"]
+      "taskTypes": ["llm_chat", "llm_prompt_lab"]
     }
   ]
 }

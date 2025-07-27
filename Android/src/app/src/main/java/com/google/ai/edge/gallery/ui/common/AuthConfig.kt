@@ -20,15 +20,15 @@ import androidx.core.net.toUri
 import net.openid.appauth.AuthorizationServiceConfiguration
 
 object AuthConfig {
-  // Hugging Face Client ID.
-  const val clientId = "REPLACE_WITH_YOUR_CLIENT_ID_IN_HUGGINGFACE_APP"
+  // Hugging Face Client ID
+  const val clientId = "75ac530d-697c-4baa-b1e6-d588d2aaa690"
 
   // Registered redirect URI.
   //
   // The scheme needs to match the
   // "android.defaultConfig.manifestPlaceholders["appAuthRedirectScheme"]" field in
   // "build.gradle.kts".
-  const val redirectUri = "REPLACE_WITH_YOUR_REDIRECT_URI_IN_HUGGINGFACE_APP"
+  const val redirectUri = "com.google.aiedge.gallery://oauth"
 
   // OAuth 2.0 Endpoints (Authorization + Token Exchange)
   private const val authEndpoint = "https://huggingface.co/oauth/authorize"

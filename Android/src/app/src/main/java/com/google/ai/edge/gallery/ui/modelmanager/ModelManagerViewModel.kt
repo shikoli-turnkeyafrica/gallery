@@ -643,17 +643,22 @@ constructor(
     viewModelScope.launch(Dispatchers.IO) {
       try {
         // Load model allowlist json.
-        Log.d(TAG, "Loading model allowlist from internet...")
-        val data = getJsonResponse<ModelAllowlist>(url = MODEL_ALLOWLIST_URL)
-        var modelAllowlist: ModelAllowlist? = data?.jsonObj
+        // Commented out internet loading to use local allowlist with custom models
+        // Log.d(TAG, "Loading model allowlist from internet...")
+        // val data = getJsonResponse<ModelAllowlist>(url = MODEL_ALLOWLIST_URL)
+        // var modelAllowlist: ModelAllowlist? = data?.jsonObj
 
-        if (modelAllowlist == null) {
-          Log.d(TAG, "Failed to load model allowlist from internet. Trying to load it from disk")
-          modelAllowlist = readModelAllowlistFromDisk()
-        } else {
-          Log.d(TAG, "Done: loading model allowlist from internet")
-          saveModelAllowlistToDisk(modelAllowlistContent = data?.textContent ?: "{}")
-        }
+        // if (modelAllowlist == null) {
+        //   Log.d(TAG, "Failed to load model allowlist from internet. Trying to load it from disk")
+        //   modelAllowlist = readModelAllowlistFromDisk()
+        // } else {
+        //   Log.d(TAG, "Done: loading model allowlist from internet")
+        //   saveModelAllowlistToDisk(modelAllowlistContent = data?.textContent ?: "{}")
+        // }
+
+        // Force loading from local disk to use custom models
+        Log.d(TAG, "Loading model allowlist from local disk...")
+        val modelAllowlist = readModelAllowlistFromDisk()
 
         if (modelAllowlist == null) {
           _uiState.update {
@@ -723,10 +728,27 @@ constructor(
     try {
       Log.d(TAG, "Reading model allowlist from disk...")
       val file = File(externalFilesDir, MODEL_ALLOWLIST_FILENAME)
+      
+      var content: String? = null
+      
+      // First try to read from external files (where internet downloads are saved)
       if (file.exists()) {
-        val content = file.readText()
-        Log.d(TAG, "Model allowlist content from local file: $content")
-
+        content = file.readText()
+        Log.d(TAG, "Model allowlist loaded from external files")
+      } else {
+        // Fallback: try to read from assets (bundled with APK)
+        Log.d(TAG, "External file not found, trying to read from assets...")
+        try {
+          val inputStream = context.assets.open(MODEL_ALLOWLIST_FILENAME)
+          content = inputStream.bufferedReader().use { it.readText() }
+          Log.d(TAG, "Model allowlist loaded from assets")
+        } catch (e: Exception) {
+          Log.e(TAG, "Failed to read from assets", e)
+        }
+      }
+      
+      if (content != null) {
+        Log.d(TAG, "Model allowlist content: $content")
         val gson = Gson()
         val type = object : TypeToken<ModelAllowlist>() {}.type
         return gson.fromJson<ModelAllowlist>(content, type)
