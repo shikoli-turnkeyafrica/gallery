@@ -46,6 +46,7 @@ import androidx.navigation.NavHostController
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
+import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.google.ai.edge.gallery.data.Model
 import com.google.ai.edge.gallery.data.TASK_LLM_ASK_AUDIO
@@ -71,9 +72,11 @@ import com.google.ai.edge.gallery.ui.llmsingleturn.LlmSingleTurnScreen
 import com.google.ai.edge.gallery.ui.llmsingleturn.LlmSingleTurnViewModel
 import com.google.ai.edge.gallery.ui.modelmanager.ModelManager
 import com.google.ai.edge.gallery.ui.modelmanager.ModelManagerViewModel
+import com.google.ai.edge.gallery.ui.smartloan.SmartLoanNavHost
 
 private const val TAG = "AGGalleryNavGraph"
 private const val ROUTE_PLACEHOLDER = "placeholder"
+private const val SMART_LOAN_ROUTE = "smart_loan"
 private const val ENTER_ANIMATION_DURATION_MS = 500
 private val ENTER_ANIMATION_EASING = EaseOutExpo
 private const val ENTER_ANIMATION_DELAY_MS = 100
@@ -116,6 +119,7 @@ fun GalleryNavHost(
 ) {
   val lifecycleOwner = LocalLifecycleOwner.current
   var showModelManager by remember { mutableStateOf(false) }
+  var showSmartLoan by remember { mutableStateOf(false) }
   var pickedTask by remember { mutableStateOf<Task?>(null) }
 
   // Track whether app is in foreground.
@@ -146,7 +150,12 @@ fun GalleryNavHost(
     tosViewModel = hiltViewModel(),
     navigateToTaskScreen = { task ->
       pickedTask = task
-      showModelManager = true
+      // Smart Loan bypasses model manager and goes directly to its flow
+      if (task.type == TaskType.SMART_LOAN) {
+        showSmartLoan = true
+      } else {
+        showModelManager = true
+      }
       firebaseAnalytics?.logEvent(
         "capability_select",
         bundleOf("capability_name" to task.type.toString()),
@@ -154,7 +163,7 @@ fun GalleryNavHost(
     },
   )
 
-  // Model manager.
+  // Model manager for regular tasks
   AnimatedVisibility(
     visible = showModelManager,
     enter = slideInHorizontally(initialOffsetX = { it }),
@@ -175,6 +184,19 @@ fun GalleryNavHost(
         navigateUp = { showModelManager = false },
       )
     }
+  }
+
+  // Smart Loan navigation flow
+  AnimatedVisibility(
+    visible = showSmartLoan,
+    enter = slideInHorizontally(initialOffsetX = { it }),
+    exit = slideOutHorizontally(targetOffsetX = { it }),
+  ) {
+    val smartLoanNavController = rememberNavController()
+    SmartLoanNavHost(
+      navController = smartLoanNavController,
+      onNavigateUp = { showSmartLoan = false }
+    )
   }
 
   NavHost(
@@ -301,6 +323,10 @@ fun navigateToTaskScreen(
     TaskType.LLM_ASK_AUDIO -> navController.navigate("${LlmAskAudioDestination.route}/${modelName}")
     TaskType.LLM_PROMPT_LAB ->
       navController.navigate("${LlmSingleTurnDestination.route}/${modelName}")
+    TaskType.SMART_LOAN -> {
+      // Smart Loan navigation is handled separately in GalleryNavHost
+      // This case should not be reached as Smart Loan bypasses this function
+    }
     TaskType.TEST_TASK_1 -> {}
     TaskType.TEST_TASK_2 -> {}
   }

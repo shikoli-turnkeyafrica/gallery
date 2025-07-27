@@ -294,6 +294,7 @@ constructor(
         TaskType.LLM_PROMPT_LAB ->
           LlmChatModelHelper.initialize(context = context, model = model, onDone = onDone)
 
+        TaskType.SMART_LOAN -> {} // Smart Loan doesn't use models
         TaskType.TEST_TASK_1 -> {}
         TaskType.TEST_TASK_2 -> {}
       }
@@ -310,6 +311,7 @@ constructor(
         TaskType.LLM_ASK_IMAGE,
         TaskType.LLM_ASK_AUDIO -> LlmChatModelHelper.cleanUp(model = model)
 
+        TaskType.SMART_LOAN -> {} // Smart Loan doesn't use models
         TaskType.TEST_TASK_1 -> {}
         TaskType.TEST_TASK_2 -> {}
       }
