@@ -195,6 +195,7 @@ fun GalleryNavHost(
     val smartLoanNavController = rememberNavController()
     SmartLoanNavHost(
       navController = smartLoanNavController,
+      modelManagerViewModel = modelManagerViewModel,
       onNavigateUp = { showSmartLoan = false }
     )
   }

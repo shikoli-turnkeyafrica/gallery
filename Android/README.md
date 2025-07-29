@@ -1,1 +1,1 @@
-# Google AI Edge Gallery (Android)
+# Akili AI (Android)

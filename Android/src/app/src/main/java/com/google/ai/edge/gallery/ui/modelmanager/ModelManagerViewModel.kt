@@ -40,6 +40,7 @@ import com.google.ai.edge.gallery.data.TASK_LLM_ASK_AUDIO
 import com.google.ai.edge.gallery.data.TASK_LLM_ASK_IMAGE
 import com.google.ai.edge.gallery.data.TASK_LLM_CHAT
 import com.google.ai.edge.gallery.data.TASK_LLM_PROMPT_LAB
+import com.google.ai.edge.gallery.data.TASK_SMART_LOAN
 import com.google.ai.edge.gallery.data.Task
 import com.google.ai.edge.gallery.data.TaskType
 import com.google.ai.edge.gallery.data.createLlmChatConfigs
@@ -291,10 +292,9 @@ constructor(
         TaskType.LLM_CHAT,
         TaskType.LLM_ASK_IMAGE,
         TaskType.LLM_ASK_AUDIO,
-        TaskType.LLM_PROMPT_LAB ->
+        TaskType.LLM_PROMPT_LAB,
+        TaskType.SMART_LOAN ->  // Smart Loan now uses the same model system as Ask Image
           LlmChatModelHelper.initialize(context = context, model = model, onDone = onDone)
-
-        TaskType.SMART_LOAN -> {} // Smart Loan doesn't use models
         TaskType.TEST_TASK_1 -> {}
         TaskType.TEST_TASK_2 -> {}
       }
@@ -309,9 +309,8 @@ constructor(
         TaskType.LLM_CHAT,
         TaskType.LLM_PROMPT_LAB,
         TaskType.LLM_ASK_IMAGE,
-        TaskType.LLM_ASK_AUDIO -> LlmChatModelHelper.cleanUp(model = model)
-
-        TaskType.SMART_LOAN -> {} // Smart Loan doesn't use models
+        TaskType.LLM_ASK_AUDIO,
+        TaskType.SMART_LOAN -> LlmChatModelHelper.cleanUp(model = model)  // Smart Loan uses same cleanup
         TaskType.TEST_TASK_1 -> {}
         TaskType.TEST_TASK_2 -> {}
       }
@@ -676,6 +675,7 @@ constructor(
         TASK_LLM_PROMPT_LAB.models.clear()
         TASK_LLM_ASK_IMAGE.models.clear()
         TASK_LLM_ASK_AUDIO.models.clear()
+        TASK_SMART_LOAN.models.clear()
         for (allowedModel in modelAllowlist.models) {
           if (allowedModel.disabled == true) {
             continue
@@ -693,6 +693,9 @@ constructor(
           }
           if (allowedModel.taskTypes.contains(TASK_LLM_ASK_AUDIO.type.id)) {
             TASK_LLM_ASK_AUDIO.models.add(model)
+          }
+          if (allowedModel.taskTypes.contains(TASK_SMART_LOAN.type.id)) {
+            TASK_SMART_LOAN.models.add(model)
           }
         }
 
@@ -798,6 +801,7 @@ constructor(
       TASK_LLM_PROMPT_LAB.models.add(model)
       if (model.llmSupportImage) {
         TASK_LLM_ASK_IMAGE.models.add(model)
+        TASK_SMART_LOAN.models.add(model)
       }
       if (model.llmSupportAudio) {
         TASK_LLM_ASK_AUDIO.models.add(model)

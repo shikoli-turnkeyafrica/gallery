@@ -16,9 +16,11 @@
 
 package com.google.ai.edge.gallery.ui.smartloan
 
+import androidx.compose.animation.core.EaseOutCubic
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
@@ -50,6 +52,11 @@ import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.platform.LocalContext
+import kotlinx.coroutines.delay
+import com.google.ai.edge.gallery.data.TASK_SMART_LOAN
+import com.google.ai.edge.gallery.ui.modelmanager.ModelManagerViewModel
+import com.google.ai.edge.gallery.data.ModelDownloadStatusType
 
 /**
  * Validation Progress Screen - Shows AI processing progress and status
@@ -59,19 +66,54 @@ import androidx.compose.ui.unit.dp
 fun ValidationProgressScreen(
   onValidationComplete: () -> Unit,
   viewModel: SmartLoanViewModel,
+  modelManagerViewModel: ModelManagerViewModel,
   modifier: Modifier = Modifier,
 ) {
   val uiState by viewModel.uiState.collectAsState()
+  val modelManagerUiState by modelManagerViewModel.uiState.collectAsState()
+  val context = LocalContext.current
   
-  // Start validation when screen is first displayed
-  LaunchedEffect(Unit) {
-    viewModel.startValidation()
+  // Get the first available model from TASK_SMART_LOAN (like Ask Image does)
+  val selectedModel = if (TASK_SMART_LOAN.models.isNotEmpty()) {
+    TASK_SMART_LOAN.models[0]
+  } else {
+    null
   }
   
-  // Navigate to offer screen when validation is complete
-  LaunchedEffect(uiState.isValidating) {
-    if (!uiState.isValidating && uiState.validationProgress >= 1f) {
+  // Initialize model when download status is SUCCEEDED (same as Ask Image)
+  LaunchedEffect(selectedModel) {
+    if (selectedModel != null) {
+      val downloadStatus = modelManagerUiState.modelDownloadStatus[selectedModel.name]
+      if (downloadStatus?.status == ModelDownloadStatusType.SUCCEEDED) {
+        android.util.Log.d("ValidationProgressScreen", "Initializing model '${selectedModel.name}' (Ask Image approach)")
+        modelManagerViewModel.initializeModel(context, task = TASK_SMART_LOAN, model = selectedModel)
+      }
+    }
+  }
+  
+  // Start AI extraction when model is initialized (same as Ask Image)
+  LaunchedEffect(selectedModel?.instance) {
+    if (selectedModel != null && selectedModel.instance != null) {
+      android.util.Log.d("ValidationProgressScreen", "Model initialized, starting extraction with: ${selectedModel.name}")
+      viewModel.startDataExtractionWithModel(selectedModel)
+    }
+  }
+  
+  // Navigate to offer screen when extraction is complete
+  LaunchedEffect(uiState.extractionProgress, uiState.extractedData) {
+    if (uiState.extractionProgress >= 1f && uiState.extractedData?.isComplete == true) {
+      // Add a brief delay to show 100% completion before navigation
+      delay(2000) // 2 second delay to show success state
       onValidationComplete()
+    }
+  }
+  
+  // Show post-completion feedback if extraction is done but data is incomplete
+  LaunchedEffect(uiState.extractionProgress, uiState.extractedData) {
+    if (uiState.extractionProgress >= 1f && uiState.extractedData?.isComplete == false) {
+      // Data extracted but needs manual review - wait a bit then navigate anyway
+      delay(3000) // 3 second delay to show completion message
+      onValidationComplete() // Navigate to review screen anyway
     }
   }
   
@@ -138,17 +180,48 @@ fun ValidationProgressScreen(
       )
       
       // Status Message
+      val statusMessage = when {
+        uiState.extractionProgress >= 1f && uiState.extractedData?.isComplete == true -> "✅ Documents processed successfully! Preparing your loan offer..."
+        uiState.extractionProgress >= 1f && uiState.extractedData?.isComplete == false -> "⚠️ Extraction complete! Some data may need manual review..."
+        uiState.extractionStatus.isNotBlank() -> uiState.extractionStatus
+        else -> "Initializing AI model..."
+      }
+      
       Text(
-        text = uiState.validationStatus,
+        text = statusMessage,
         style = MaterialTheme.typography.bodyLarge,
         textAlign = TextAlign.Center,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-        modifier = Modifier.padding(bottom = 24.dp)
+        color = when {
+          uiState.extractionProgress >= 1f && uiState.extractedData?.isComplete == true -> MaterialTheme.colorScheme.primary
+          uiState.extractionProgress >= 1f && uiState.extractedData?.isComplete == false -> MaterialTheme.colorScheme.tertiary
+          else -> MaterialTheme.colorScheme.onSurfaceVariant
+        },
+        modifier = Modifier.padding(bottom = 8.dp)
       )
       
-      // Progress Bar
+      // Error Message (if any)
+      uiState.extractionError?.let { error ->
+        Text(
+          text = error,
+          style = MaterialTheme.typography.bodyMedium,
+          textAlign = TextAlign.Center,
+          color = MaterialTheme.colorScheme.error,
+          modifier = Modifier.padding(bottom = 16.dp)
+        )
+      }
+      
+      // Animated Progress Bar
+      val animatedProgress by animateFloatAsState(
+        targetValue = uiState.extractionProgress,
+        animationSpec = tween(
+          durationMillis = 800, // Smooth 800ms transition
+          easing = EaseOutCubic
+        ),
+        label = "progress_animation"
+      )
+      
       LinearProgressIndicator(
-        progress = { uiState.validationProgress },
+        progress = { animatedProgress },
         modifier = Modifier
           .fillMaxWidth()
           .padding(bottom = 16.dp),
@@ -156,36 +229,62 @@ fun ValidationProgressScreen(
       
       // Progress Percentage
       Text(
-        text = "${(uiState.validationProgress * 100).toInt()}%",
+        text = "${(animatedProgress * 100).toInt()}%",
         style = MaterialTheme.typography.bodyMedium,
         color = MaterialTheme.colorScheme.primary,
         fontWeight = FontWeight.Medium
       )
       
-      // Progress Steps
+      // Confidence Score (if available)
+      uiState.extractedData?.let { data ->
+        if (data.overallConfidence > 0f) {
+          Text(
+            text = "Extraction Confidence: ${(data.overallConfidence * 100).toInt()}%",
+            style = MaterialTheme.typography.bodySmall,
+            color = if (data.overallConfidence > 0.8f) 
+              MaterialTheme.colorScheme.primary 
+            else 
+              MaterialTheme.colorScheme.secondary,
+            modifier = Modifier.padding(top = 8.dp)
+          )
+        }
+      }
+      
+      // AI Extraction Steps
       Column(
         modifier = Modifier.padding(top = 32.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)
       ) {
         ProcessingStep(
-          title = "ID Document Analysis",
-          isCompleted = uiState.validationProgress > 0.25f,
-          isActive = uiState.validationProgress in 0f..0.25f
+          title = "Initializing AI Vision Model",
+          isCompleted = uiState.extractionProgress > 0.1f,
+          isActive = uiState.extractionProgress in 0f..0.1f,
+          details = if (uiState.extractionProgress <= 0.1f) "Loading Gemma 3n model..." else null
         )
         ProcessingStep(
-          title = "Personal Information Extraction",
-          isCompleted = uiState.validationProgress > 0.5f,
-          isActive = uiState.validationProgress in 0.25f..0.5f
+          title = "Processing ID Documents",
+          isCompleted = uiState.extractionProgress > 0.3f,
+          isActive = uiState.extractionProgress in 0.1f..0.3f,
+          details = uiState.extractedData?.idCardData?.let { id ->
+            if (id.isValid) "✓ Extracted: ${id.fullName}" else null
+          }
         )
         ProcessingStep(
-          title = "Payslip Processing",
-          isCompleted = uiState.validationProgress > 0.75f,
-          isActive = uiState.validationProgress in 0.5f..0.75f
+          title = "Extracting Payslip Data",
+          isCompleted = uiState.extractionProgress > 0.9f,
+          isActive = uiState.extractionProgress in 0.3f..0.9f,
+          details = uiState.extractedData?.let { data ->
+            val validPayslips = data.payslipData.count { it.isValid }
+            if (validPayslips > 0) "✓ Processed $validPayslips payslip(s)" else null
+          }
         )
         ProcessingStep(
-          title = "Loan Eligibility Calculation",
-          isCompleted = uiState.validationProgress >= 1f,
-          isActive = uiState.validationProgress in 0.75f..1f
+          title = "Validating Extracted Data",
+          isCompleted = uiState.extractionProgress >= 1f,
+          isActive = uiState.extractionProgress in 0.9f..1f,
+          details = uiState.extractedData?.let { data ->
+            if (data.isComplete) "✓ Ready for loan assessment" else "Checking data consistency..."
+          }
         )
       }
     }
@@ -197,6 +296,7 @@ private fun ProcessingStep(
   title: String,
   isCompleted: Boolean,
   isActive: Boolean,
+  details: String? = null,
   modifier: Modifier = Modifier,
 ) {
   val textColor = when {
@@ -211,10 +311,23 @@ private fun ProcessingStep(
     else -> "⏳"
   }
   
-  Text(
-    text = "$icon $title",
-    style = MaterialTheme.typography.bodyMedium,
-    color = textColor,
+  Column(
     modifier = modifier
-  )
+  ) {
+    Text(
+      text = "$icon $title",
+      style = MaterialTheme.typography.bodyMedium,
+      color = textColor
+    )
+    
+    // Show details if available
+    details?.let { detailText ->
+      Text(
+        text = detailText,
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.padding(start = 24.dp, top = 2.dp)
+      )
+    }
+  }
 } 

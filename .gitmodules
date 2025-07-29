@@ -1,0 +1,3 @@
+[submodule "ai-edge-apis"]
+	path = ai-edge-apis
+	url = https://github.com/google-ai-edge/ai-edge-apis.git

@@ -22,7 +22,7 @@
       "name": "Gemma-3n-E4B-it-int4",
       "modelId": "google/gemma-3n-E4B-it-litert-preview",
       "modelFile": "gemma-3n-E4B-it-int4.task",
-      "description": "Preview version of [Gemma 3n E4B](https://ai.google.dev/gemma/docs/gemma-3n) ready for deployment on Android using the [MediaPipe LLM Inference API](https://ai.google.dev/edge/mediapipe/solutions/genai/llm_inference). The current checkpoint only supports text and vision input, with 4096 context length.",
+      "description": "Preview version of [Gemma 3n E4B](https://ai.google.dev/gemma/docs/gemma-3n) ready for deployment on Android using the [MediaPipe LLM Inference API](https://ai.google.dev/edge/mediapipe/solutions/genai/llm_inference). The current checkpoint supports text and vision input, with 4096 context length. Enhanced for Smart Loan data extraction.",
       "sizeInBytes": 4405655031,
       "estimatedPeakMemoryInBytes": 6979321856,
       "version": "20250520",
@@ -34,7 +34,7 @@
         "maxTokens": 4096,
         "accelerators": "cpu,gpu"
       },
-      "taskTypes": ["llm_chat", "llm_prompt_lab", "llm_ask_image"]
+      "taskTypes": ["llm_chat", "llm_prompt_lab", "llm_ask_image", "vision_extraction", "smart_loan"]
     },
     {
       "name": "Gemma3-1B-IT q4",
@@ -85,7 +85,25 @@
         "maxTokens": 4096,
         "accelerators": "cpu,gpu"
       },
-      "taskTypes": ["llm_chat", "llm_prompt_lab"]
+      "taskTypes": ["llm_chat", "llm_prompt_lab", "function_call"]
+    },
+    {
+      "name": "Gemma3n-E4B q8",
+      "modelId": "litert-community/Gemma3n-E4B-q8",
+      "modelFile": "Gemma3n-E4B_seq128_q8.task",
+      "description": "Gemma3n-E4B model with 8-bit quantization and vision capabilities, ready for deployment on Android using the [MediaPipe LLM Inference API](https://ai.google.dev/edge/mediapipe/solutions/genai/llm_inference). Enhanced vision processing for image understanding tasks.",
+      "sizeInBytes": 4800000000,
+      "estimatedPeakMemoryInBytes": 7516192768,
+      "version": "20250101",
+      "llmSupportImage": true,
+      "defaultConfig": {
+        "topK": 64,
+        "topP": 0.95,
+        "temperature": 1.0,
+        "maxTokens": 4096,
+        "accelerators": "cpu,gpu"
+      },
+      "taskTypes": ["llm_chat", "llm_prompt_lab", "llm_ask_image", "vision"]
     }
   ]
 }

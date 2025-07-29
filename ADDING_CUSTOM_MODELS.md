@@ -1,6 +1,6 @@
-# Adding Custom Models to AI Edge Gallery
+# Adding Custom Models to Akili AI
 
-This guide explains how to add custom AI models to the Google AI Edge Gallery Android app.
+This guide explains how to add custom AI models to the Akili AI Android app.
 
 ## Overview
 

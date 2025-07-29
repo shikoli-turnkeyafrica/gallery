@@ -16,81 +16,68 @@
 -->
 
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    package="com.google.ai.edge.gallery"
-    xmlns:tools="http://schemas.android.com/tools">
-
-    <uses-sdk
-        android:minSdkVersion="31"
-        android:compileSdkVersion ="35"
-        android:targetSdkVersion="35" />
+    xmlns:tools="http://schemas.android.com/tools"
+    android:installLocation="internalOnly">
 
     <uses-permission android:name="android.permission.CAMERA" />
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC"/>
-    <uses-permission android:name="android.permission.INTERNET" />
-    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
-    <uses-permission android:name="android.permission.WAKE_LOCK"/>
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
+    <!-- Network permissions for model download -->
+    <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
 
-    <uses-feature
-        android:name="android.hardware.camera"
-        android:required="false" />
+    <!-- To save and load MediaPipe model files -->
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"
+        android:maxSdkVersion="28" />
+
+    <!-- Optional for displaying download notification to user -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <application
-        android:name="com.google.ai.edge.gallery.GalleryApplication"
-        android:allowBackup="true"
+        android:allowBackup="false"
         android:dataExtractionRules="@xml/data_extraction_rules"
-        android:fullBackupContent="@xml/backup_rules"
+        android:fullBackupContent="false"
+        android:hardwareAccelerated="true"
         android:icon="@mipmap/ic_launcher"
-        android:label="Edge Gallery"
-        android:roundIcon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:name="com.google.ai.edge.gallery.GalleryApplication"
+        android:requestLegacyExternalStorage="true"
         android:supportsRtl="true"
         android:theme="@style/Theme.Gallery"
         tools:targetApi="31">
-        <!--
-          android:configChanges="uiMode" tells the system don't destroy and
-          recreate the activity when UI mode changes (e.g. setting dark mode).
-          Instead, just recompose the view.
-         -->
+
         <activity
             android:name="com.google.ai.edge.gallery.MainActivity"
             android:exported="true"
-            android:theme="@style/Theme.Gallery.SplashScreen"
+            android:launchMode="singleTop"
             android:screenOrientation="portrait"
-            android:windowSoftInputMode="adjustResize"
-            android:configChanges="uiMode"
-            tools:ignore="DiscouragedApi,LockedOrientationActivity">
-            <!-- This is for putting the app into launcher -->
+            android:theme="@style/Theme.Gallery"
+            android:windowSoftInputMode="adjustResize">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
+
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
 
-            <!-- This is for deep linking -->
-            <intent-filter>
+            <intent-filter android:autoVerify="true">
                 <action android:name="android.intent.action.VIEW" />
-
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
-
                 <data android:scheme="com.google.ai.edge.gallery" />
             </intent-filter>
         </activity>
 
-        <!-- Set themes for activities that are used for viewing open source licenses -->
         <activity
             android:name="com.google.android.gms.oss.licenses.OssLicensesMenuActivity"
-            android:exported="true"
-            android:theme="@style/Theme.Gallery.OssLicenses" />
+            android:theme="@style/Theme.Gallery" />
         <activity
             android:name="com.google.android.gms.oss.licenses.OssLicensesActivity"
-            android:exported="true"
-            android:theme="@style/Theme.Gallery.OssLicenses" />
+            android:theme="@style/Theme.Gallery" />
 
         <provider
             android:name="androidx.core.content.FileProvider"
-            android:authorities="${applicationId}.provider"
+            android:authorities="com.google.ai.edge.gallery.provider"
             android:exported="false"
             android:grantUriPermissions="true">
             <meta-data
@@ -98,15 +85,8 @@
                 android:resource="@xml/file_paths" />
         </provider>
 
+        <!-- Firebase Analytics -->
         <service
-            android:name="androidx.work.impl.foreground.SystemForegroundService"
-            android:foregroundServiceType="dataSync"
-            android:exported="false"
-            tools:node="merge">
-        </service>
-
-        <!-- For Firebase Analytics. -->
-        <receiver
             android:name="com.google.android.gms.measurement.AppMeasurementReceiver"
             android:enabled="true"
             android:exported="false" />
@@ -115,9 +95,16 @@
             android:exported="false" />
         <service
             android:name="com.google.android.gms.measurement.AppMeasurementJobService"
+            android:permission="android.permission.BIND_JOB_SERVICE"
             android:enabled="true"
-            android:exported="false"
-            android:permission="android.permission.BIND_JOB_SERVICE" />
+            android:exported="false" />
+
+        <!-- WorkManager SystemForegroundService for model downloads -->
+        <service
+            android:name="androidx.work.impl.foreground.SystemForegroundService"
+            android:foregroundServiceType="dataSync"
+            android:exported="false" />
+
     </application>
 
 </manifest>

@@ -28,15 +28,15 @@ plugins {
 }
 
 android {
-  namespace = "com.google.ai.edge.gallery"
-  compileSdk = 35
+      namespace = "com.google.ai.edge.gallery"
+    compileSdk = 35
 
-  defaultConfig {
-    applicationId = "com.google.aiedge.gallery"
-    minSdk = 31
+    defaultConfig {
+        applicationId = "com.google.ai.edge.gallery"
+    minSdk = 26
     targetSdk = 35
     versionCode = 1
-    versionName = "1.0.4"
+    versionName = "1.0"
 
     // Needed for HuggingFace auth workflows.
     // Use the scheme of the "Redirect URLs" in HuggingFace app.
@@ -44,6 +44,13 @@ android {
         "com.google.aiedge.gallery"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+    vectorDrawables {
+        useSupportLibrary = true
+    }
+
+            resourceConfigurations += listOf(
+            "en"
+        )
   }
 
   buildTypes {
@@ -86,6 +93,7 @@ dependencies {
   implementation(libs.mediapipe.tasks.text)
   implementation(libs.mediapipe.tasks.genai)
   implementation(libs.mediapipe.tasks.imagegen)
+  // Using MediaPipe GenAI with structured function calling approach (inspired by healthcare demo)
   implementation(libs.commonmark)
   implementation(libs.richtext)
   implementation(libs.tflite)
@@ -95,6 +103,8 @@ dependencies {
   implementation(libs.camerax.camera2)
   implementation(libs.camerax.lifecycle)
   implementation(libs.camerax.view)
+  implementation("androidx.security:security-crypto:1.1.0-alpha06")
+  implementation("androidx.biometric:biometric:1.1.0")
   implementation(libs.openid.appauth)
   implementation(libs.androidx.splashscreen)
   implementation(libs.protobuf.javalite)

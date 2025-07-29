@@ -22,6 +22,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
+import com.google.ai.edge.gallery.ui.modelmanager.ModelManagerViewModel
 
 /** Smart Loan navigation routes */
 object SmartLoanRoutes {
@@ -29,7 +30,9 @@ object SmartLoanRoutes {
   const val ID_CAPTURE = "smart_loan_id_capture"
   const val PAYSLIP_CAPTURE = "smart_loan_payslip_capture"
   const val VALIDATION_PROGRESS = "smart_loan_validation"
+  const val VALIDATION_REPORT = "smart_loan_validation_report"
   const val OFFER = "smart_loan_offer"
+  const val ACCEPTANCE_SUCCESS = "smart_loan_acceptance_success"
 }
 
 /**
@@ -38,6 +41,7 @@ object SmartLoanRoutes {
 @Composable
 fun SmartLoanNavHost(
   navController: NavHostController,
+  modelManagerViewModel: ModelManagerViewModel,
   onNavigateUp: () -> Unit,
   modifier: Modifier = Modifier,
 ) {
@@ -81,11 +85,22 @@ fun SmartLoanNavHost(
     composable(route = SmartLoanRoutes.VALIDATION_PROGRESS) {
       ValidationProgressScreen(
         onValidationComplete = {
-          navController.navigate(SmartLoanRoutes.OFFER) {
+          navController.navigate(SmartLoanRoutes.VALIDATION_REPORT) {
             // Clear back stack to prevent going back to validation
             popUpTo(SmartLoanRoutes.VALIDATION_PROGRESS) { inclusive = true }
           }
         },
+        viewModel = viewModel,
+        modelManagerViewModel = modelManagerViewModel,
+      )
+    }
+    
+    composable(route = SmartLoanRoutes.VALIDATION_REPORT) {
+      ValidationReportScreen(
+        onContinue = {
+          navController.navigate(SmartLoanRoutes.OFFER)
+        },
+        onNavigateUp = { navController.navigateUp() },
         viewModel = viewModel,
       )
     }
@@ -93,15 +108,34 @@ fun SmartLoanNavHost(
     composable(route = SmartLoanRoutes.OFFER) {
       OfferScreen(
         onAcceptOffer = {
-          // In real app, this would handle offer acceptance
-          onNavigateUp()
+          navController.navigate(SmartLoanRoutes.ACCEPTANCE_SUCCESS) {
+            popUpTo(SmartLoanRoutes.OFFER) { inclusive = true }
+          }
         },
         onDeclineOffer = {
-          // In real app, this would handle offer decline  
-          onNavigateUp()
+          // Navigate back to start for new application
+          navController.navigate(SmartLoanRoutes.START_APPLICATION) {
+            popUpTo(SmartLoanRoutes.START_APPLICATION) { inclusive = true }
+          }
         },
         onNavigateUp = onNavigateUp,
         viewModel = viewModel,
+      )
+    }
+    
+    composable(route = SmartLoanRoutes.ACCEPTANCE_SUCCESS) {
+      AcceptanceSuccessScreen(
+        loanOffer = viewModel.uiState.value.loanOffer,
+        disbursementMemo = viewModel.uiState.value.disbursementMemo,
+        onExportMemo = { viewModel.exportDisbursementMemo() },
+        onViewMemo = { viewModel.viewDisbursementMemo() },
+        onNewApplication = {
+          viewModel.startNewApplication()
+          navController.navigate(SmartLoanRoutes.START_APPLICATION) {
+            popUpTo(SmartLoanRoutes.START_APPLICATION) { inclusive = true }
+          }
+        },
+        onBackToHome = onNavigateUp
       )
     }
   }

@@ -1,0 +1,71 @@
+{
+  "lendingPolicy": {
+    "maxDSR": 0.50,
+    "minAge": 18,
+    "maxAge": 60,
+    "minSalary": 15000,
+    "maxLoanAmount": 500000,
+    "defaultInterestRate": 0.15,
+    "defaultTermMonths": 12,
+    "payslipRecencyMonths": 3,
+    "minExtractionConfidence": 0.85,
+    "conservativeOfferRatio": 0.8
+  },
+  "validationRules": {
+    "payslipRecency": {
+      "enabled": true,
+      "maxAgeMonths": 3,
+      "errorMessage": "All payslips must be from the last 3 months",
+      "priority": 1
+    },
+    "payslipCount": {
+      "enabled": true,
+      "minPayslips": 3,
+      "errorMessage": "Minimum of 3 consecutive months of payslips required for accurate income assessment",
+      "priority": 2
+    },
+    "nameConsistency": {
+      "enabled": true,
+      "fuzzyMatchThreshold": 0.8,
+      "errorMessage": "ID name must closely match payslip names",
+      "priority": 3
+    },
+    "retirementAge": {
+      "enabled": true,
+      "maxAge": 60,
+      "errorMessage": "Applicant age plus loan term cannot exceed 60 years",
+      "priority": 4
+    },
+    "dataQuality": {
+      "enabled": true,
+      "minConfidence": 0.55,
+      "errorMessage": "Document extraction confidence is too low. Please retake photos with better quality",
+      "priority": 5
+    },
+    "affordability": {
+      "enabled": true,
+      "maxDSR": 0.50,
+      "minSalary": 15000,
+      "errorMessage": "Insufficient income to support loan repayment",
+      "priority": 6
+    }
+  },
+  "loanTerms": {
+    "availableTerms": [6, 12, 18, 24],
+    "defaultTerm": 12,
+    "interestRates": {
+      "6": 0.12,
+      "12": 0.15,
+      "18": 0.18,
+      "24": 0.20
+    }
+  },
+  "errorMessages": {
+    "invalidAge": "Age must be between {minAge} and {maxAge} years",
+    "lowSalary": "Minimum salary requirement is KES {minSalary}",
+    "highDSR": "Debt service ratio of {dsr}% exceeds maximum allowed {maxDSR}%",
+    "oldPayslip": "Payslip dated {date} is older than {maxMonths} months",
+    "nameMismatch": "ID name '{idName}' does not match payslip name '{payslipName}'",
+    "insufficientPayslips": "At least {minPayslips} consecutive payslips required for loan assessment"
+  }
+} 
