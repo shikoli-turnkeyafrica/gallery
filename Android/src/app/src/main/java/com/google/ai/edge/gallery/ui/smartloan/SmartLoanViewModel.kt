@@ -26,6 +26,7 @@ import com.google.ai.edge.gallery.data.TASKS
 import com.google.ai.edge.gallery.data.getModelByName
 import com.google.ai.edge.gallery.ui.smartloan.data.SmartLoanApplicationData
 import com.google.ai.edge.gallery.ui.smartloan.data.ExtractedApplicationData
+import com.google.ai.edge.gallery.ui.smartloan.data.LoanApplicationFormData
 import com.google.ai.edge.gallery.ui.llmchat.LlmChatModelHelper
 import com.google.ai.edge.gallery.ui.llmchat.LlmModelInstance
 import com.google.ai.edge.gallery.data.Model
@@ -35,6 +36,7 @@ import kotlin.coroutines.resume
 import kotlinx.coroutines.suspendCancellableCoroutine
 import com.google.ai.edge.gallery.ui.smartloan.storage.SecureImageStorage
 import com.google.ai.edge.gallery.ui.smartloan.validation.RuleValidationEngine
+import com.google.ai.edge.gallery.ui.smartloan.extraction.VisionExtractionEngine
 import com.google.ai.edge.gallery.ui.smartloan.validation.ApplicationValidationResult
 import com.google.ai.edge.gallery.ui.smartloan.finance.LoanOfferGenerator
 import com.google.ai.edge.gallery.ui.smartloan.finance.LoanOffer
@@ -51,6 +53,11 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+
 import java.io.File
 import javax.inject.Inject
 
@@ -116,7 +123,8 @@ data class SmartLoanUiState(
 class SmartLoanViewModel @Inject constructor(
     @ApplicationContext private val context: Context,
     private val secureImageStorage: SecureImageStorage,
-    private val ruleValidationEngine: RuleValidationEngine
+    private val ruleValidationEngine: RuleValidationEngine,
+    private val visionExtractionEngine: VisionExtractionEngine
 ) : ViewModel() {
   
   private val _uiState = MutableStateFlow(SmartLoanUiState())
@@ -266,6 +274,102 @@ class SmartLoanViewModel @Inject constructor(
         _uiState.value = _uiState.value.copy(
           isLoading = false,
           errorMessage = "Error capturing payslip: ${e.message}"
+        )
+      }
+    }
+  }
+
+  /**
+   * Capture and securely store loan application form image
+   */
+  fun captureLoanApplicationImage(isFrontPage: Boolean, bitmap: Bitmap) {
+    viewModelScope.launch {
+      try {
+        _uiState.value = _uiState.value.copy(isLoading = true)
+        
+        val pageType = if (isFrontPage) "front" else "back"
+        val filename = secureImageStorage.generateFilename("loan_application_$pageType")
+        val savedPath = secureImageStorage.saveImageSecurely(bitmap, filename)
+        
+        if (savedPath != null) {
+          val currentAppData = _uiState.value.applicationData
+          val updatedLoanApplicationImages = if (isFrontPage) {
+            currentAppData.loanApplicationImages.copy(
+              frontForm = bitmap,
+              frontFormPath = savedPath
+            )
+          } else {
+            currentAppData.loanApplicationImages.copy(
+              backForm = bitmap,
+              backFormPath = savedPath
+            )
+          }
+          val updatedAppData = currentAppData.copy(loanApplicationImages = updatedLoanApplicationImages)
+          
+          _uiState.value = _uiState.value.copy(
+            applicationData = updatedAppData,
+            isLoading = false,
+            errorMessage = null
+          )
+          
+          Log.d(TAG, "Loan application $pageType page captured and saved securely")
+        } else {
+          _uiState.value = _uiState.value.copy(
+            isLoading = false,
+            errorMessage = "Failed to save loan application $pageType page"
+          )
+        }
+      } catch (e: Exception) {
+        Log.e(TAG, "Error capturing loan application ${if (isFrontPage) "front" else "back"} page", e)
+        _uiState.value = _uiState.value.copy(
+          isLoading = false,
+          errorMessage = "Error capturing loan application form: ${e.message}"
+        )
+      }
+    }
+  }
+
+  /**
+   * Delete loan application form image
+   */
+  fun deleteLoanApplicationImage(isFrontPage: Boolean) {
+    viewModelScope.launch {
+      try {
+        val currentAppData = _uiState.value.applicationData
+        val currentLoanApplicationImages = currentAppData.loanApplicationImages
+        
+        // Delete from secure storage
+        val pathToDelete = if (isFrontPage) {
+          currentLoanApplicationImages.frontFormPath
+        } else {
+          currentLoanApplicationImages.backFormPath
+        }
+        
+        pathToDelete?.let { path ->
+          secureImageStorage.deleteImageSecurely(path)
+        }
+        
+        // Update UI state
+        val updatedLoanApplicationImages = if (isFrontPage) {
+          currentLoanApplicationImages.copy(
+            frontForm = null,
+            frontFormPath = null
+          )
+        } else {
+          currentLoanApplicationImages.copy(
+            backForm = null,
+            backFormPath = null
+          )
+        }
+        val updatedAppData = currentAppData.copy(loanApplicationImages = updatedLoanApplicationImages)
+        
+        _uiState.value = _uiState.value.copy(applicationData = updatedAppData)
+        
+        Log.d(TAG, "Loan application ${if (isFrontPage) "front" else "back"} page deleted")
+      } catch (e: Exception) {
+        Log.e(TAG, "Error deleting loan application image", e)
+        _uiState.value = _uiState.value.copy(
+          errorMessage = "Error deleting image: ${e.message}"
         )
       }
     }
@@ -834,6 +938,186 @@ class SmartLoanViewModel @Inject constructor(
   }
 
   /**
+   * Parse loan application data from text response
+   */
+  private fun parseLoanApplicationDataFromText(response: String): LoanApplicationFormData {
+    try {
+      // First try to parse as JSON function call response
+      val jsonResponse = response.trim()
+      
+      if (jsonResponse.startsWith("{") && jsonResponse.contains("extractLoanApplicationData")) {
+        try {
+          val json = Json { ignoreUnknownKeys = true }
+          val jsonElement = json.parseToJsonElement(jsonResponse)
+          val jsonObject = jsonElement.jsonObject
+          
+          if (jsonObject.containsKey("name") && jsonObject.containsKey("arguments")) {
+            val arguments = jsonObject["arguments"]?.jsonObject
+            if (arguments != null) {
+              return parseLoanApplicationFunction(arguments)
+            }
+          }
+        } catch (e: Exception) {
+          Log.w(TAG, "Failed to parse loan application as JSON function call, falling back to text parsing", e)
+        }
+      }
+      
+      // Fallback to simple text extraction
+      val firstName = extractField(response, listOf("first name", "firstName"))
+      val lastName = extractField(response, listOf("last name", "lastName"))
+      val idNumber = extractField(response, listOf("id number", "idPassportNumber", "ID"))
+      val phoneNumber = extractField(response, listOf("phone", "telephone", "mobile"))
+      val email = extractField(response, listOf("email"))
+      val residentialAddress = extractField(response, listOf("residential address", "address"))
+      val bankName = extractField(response, listOf("bank name", "bank"))
+      val accountNumber = extractField(response, listOf("account number", "account"))
+      val loanAmountText = extractField(response, listOf("loan amount", "requested amount"))
+      val installmentText = extractField(response, listOf("installment", "monthly payment"))
+      
+      val loanAmount = loanAmountText.replace(Regex("[^0-9.]"), "").toDoubleOrNull() ?: 0.0
+      val installment = installmentText.replace(Regex("[^0-9.]"), "").toDoubleOrNull() ?: 0.0
+      
+      val extractionConfidence = when {
+        firstName.isNotBlank() && lastName.isNotBlank() && loanAmount > 0 -> 0.8f
+        firstName.isNotBlank() || lastName.isNotBlank() || loanAmount > 0 -> 0.5f
+        else -> 0.1f
+      }
+      
+      return LoanApplicationFormData(
+        firstName = firstName,
+        lastName = lastName,
+        idPassportNumber = idNumber,
+        telephoneMobile = phoneNumber,
+        emailAddress = email,
+        residentialAddress = residentialAddress,
+        bankName = bankName,
+        accountNumber = accountNumber,
+        requestedLoanAmount = loanAmount,
+        requestedInstallmentAmount = installment,
+        extractionConfidence = extractionConfidence,
+        isValid = firstName.isNotBlank() && lastName.isNotBlank(),
+        extractionTimestamp = System.currentTimeMillis()
+      ).validate()
+      
+    } catch (e: Exception) {
+      Log.e(TAG, "Error parsing loan application data", e)
+      return LoanApplicationFormData(extractionConfidence = 0.0f)
+    }
+  }
+
+  /**
+   * Create loan application extraction prompt
+   */
+  private fun createLoanApplicationExtractionPrompt(): String {
+    return """
+    You are an AI that extracts data from loan application forms.
+    
+    Look at this loan application form image and extract the information from all filled fields.
+    
+    Respond with EXACTLY this JSON format (no other text):
+    {
+        "name": "extractLoanApplicationData",
+        "arguments": {
+            "title": "Ms.",
+            "firstName": "first name",
+            "middleName": "middle name", 
+            "lastName": "last name",
+            "idPassportNumber": "ID/passport number",
+            "dateOfBirth": "07-Dec-1971",
+            "telephoneMobile": "phone number",
+            "emailAddress": "email@example.com",
+            "residentialAddress": "residential address",
+            "townCity": "town/city",
+            "bankName": "bank name",
+            "accountName": "account name",
+            "accountNumber": "account number",
+            "requestedLoanAmount": 50000.0,
+            "requestedInstallmentAmount": 1250.0,
+            "requestedLoanPeriodMonths": 48,
+            "disbursementMode": "M-PESA",
+            "clientMPesaNumber": "M-PESA number",
+            "applicantSignatureDate": "date",
+            "confidence": 0.8
+        }
+    }
+    
+    Extract ALL visible information from the form.
+    Use empty strings for fields you cannot read clearly.
+    Convert amounts to numbers (remove commas/currency symbols).
+    Set confidence between 0.1 and 1.0 based on form completeness and image quality.
+    """.trimIndent()
+  }
+
+  /**
+   * Parse loan application function call arguments
+   */
+  private fun parseLoanApplicationFunction(arguments: JsonObject): LoanApplicationFormData {
+    try {
+      val title = (arguments["title"] as? JsonPrimitive)?.content ?: ""
+      val firstName = (arguments["firstName"] as? JsonPrimitive)?.content ?: ""
+      val middleName = (arguments["middleName"] as? JsonPrimitive)?.content ?: ""
+      val lastName = (arguments["lastName"] as? JsonPrimitive)?.content ?: ""
+      val idPassportNumber = (arguments["idPassportNumber"] as? JsonPrimitive)?.content ?: ""
+      val dateOfBirth = (arguments["dateOfBirth"] as? JsonPrimitive)?.content ?: ""
+      val telephoneMobile = (arguments["telephoneMobile"] as? JsonPrimitive)?.content ?: ""
+      val emailAddress = (arguments["emailAddress"] as? JsonPrimitive)?.content ?: ""
+      val residentialAddress = (arguments["residentialAddress"] as? JsonPrimitive)?.content ?: ""
+      val townCity = (arguments["townCity"] as? JsonPrimitive)?.content ?: ""
+      val bankName = (arguments["bankName"] as? JsonPrimitive)?.content ?: ""
+      val accountName = (arguments["accountName"] as? JsonPrimitive)?.content ?: ""
+      val accountNumber = (arguments["accountNumber"] as? JsonPrimitive)?.content ?: ""
+      
+      val requestedLoanAmount = try {
+        (arguments["requestedLoanAmount"] as? JsonPrimitive)?.content?.toDoubleOrNull() ?: 0.0
+      } catch (e: Exception) { 0.0 }
+      
+      val requestedInstallmentAmount = try {
+        (arguments["requestedInstallmentAmount"] as? JsonPrimitive)?.content?.toDoubleOrNull() ?: 0.0
+      } catch (e: Exception) { 0.0 }
+      
+      val requestedLoanPeriodMonths = try {
+        (arguments["requestedLoanPeriodMonths"] as? JsonPrimitive)?.content?.toIntOrNull() ?: 0
+      } catch (e: Exception) { 0 }
+      
+      val disbursementMode = (arguments["disbursementMode"] as? JsonPrimitive)?.content ?: ""
+      val clientMPesaNumber = (arguments["clientMPesaNumber"] as? JsonPrimitive)?.content ?: ""
+      val applicantSignatureDate = (arguments["applicantSignatureDate"] as? JsonPrimitive)?.content ?: ""
+      
+      val confidence = try {
+        (arguments["confidence"] as? JsonPrimitive)?.content?.toFloatOrNull() ?: 0.3f
+      } catch (e: Exception) { 0.3f }
+      
+      return LoanApplicationFormData(
+        title = title,
+        firstName = firstName,
+        middleName = middleName,
+        lastName = lastName,
+        idPassportNumber = idPassportNumber,
+        dateOfBirth = dateOfBirth,
+        telephoneMobile = telephoneMobile,
+        emailAddress = emailAddress,
+        residentialAddress = residentialAddress,
+        townCity = townCity,
+        bankName = bankName,
+        accountName = accountName,
+        accountNumber = accountNumber,
+        requestedLoanAmount = requestedLoanAmount,
+        requestedInstallmentAmount = requestedInstallmentAmount,
+        requestedLoanPeriodMonths = requestedLoanPeriodMonths,
+        disbursementMode = disbursementMode,
+        clientMPesaNumber = clientMPesaNumber,
+        applicantSignatureDate = applicantSignatureDate,
+        extractionConfidence = confidence,
+        isValid = firstName.isNotBlank() && lastName.isNotBlank(),
+        extractionTimestamp = System.currentTimeMillis()
+      ).validate()
+    } catch (e: Exception) {
+      Log.e(TAG, "Error parsing loan application function arguments", e)
+      return LoanApplicationFormData(extractionConfidence = 0.0f)
+    }
+  }
+
+  /**
    * Helper function to extract field values
    */
   private fun extractField(text: String, keywords: List<String>): String {
@@ -1060,8 +1344,8 @@ class SmartLoanViewModel @Inject constructor(
   }
 
   /**
-   * Starts data extraction with a specific model (Ask Image approach)
-   * This is the preferred method that follows the same pattern as Ask Image
+   * Start data extraction using the working Ask Image approach with loan application support
+   * This method processes all documents including the new loan application forms
    */
   fun startDataExtractionWithModel(model: Model) {
     viewModelScope.launch(Dispatchers.Default) {
@@ -1103,7 +1387,7 @@ class SmartLoanViewModel @Inject constructor(
         Log.d(TAG, "✅ Using initialized model: ${model.name} (same as Ask Image approach)")
 
         _uiState.value = _uiState.value.copy(
-          extractionProgress = 0.2f,
+          extractionProgress = 0.1f,
           extractionStatus = "Processing front ID image..."
         )
 
@@ -1115,7 +1399,6 @@ class SmartLoanViewModel @Inject constructor(
         )
         
         Log.d(TAG, "🔍 Front ID extraction returned: '${frontIdResult.take(200)}${if(frontIdResult.length > 200) "..." else ""}'")
-        Log.d(TAG, "🔍 Front ID result length: ${frontIdResult.length}")
         
         // Add delay to ensure response is fully processed before session reset
         delay(1000)
@@ -1125,7 +1408,7 @@ class SmartLoanViewModel @Inject constructor(
         LlmChatModelHelper.resetSession(model)
 
         _uiState.value = _uiState.value.copy(
-          extractionProgress = 0.4f,
+          extractionProgress = 0.2f,
           extractionStatus = "Processing back ID image..."
         )
 
@@ -1136,17 +1419,12 @@ class SmartLoanViewModel @Inject constructor(
         )
         
         Log.d(TAG, "🔍 Back ID extraction returned: '${backIdResult.take(200)}${if(backIdResult.length > 200) "..." else ""}'")
-        Log.d(TAG, "🔍 Back ID result length: ${backIdResult.length}")
         
-        // Add delay to ensure response is fully processed before session reset
         delay(1000)
-        
-        // Reset session to clear state (critical for multiple consecutive calls!)
-        Log.d(TAG, "🔄 Resetting session after back ID extraction...")
         LlmChatModelHelper.resetSession(model)
 
         _uiState.value = _uiState.value.copy(
-          extractionProgress = 0.6f,
+          extractionProgress = 0.3f,
           extractionStatus = "Processing payslips..."
         )
 
@@ -1166,7 +1444,7 @@ class SmartLoanViewModel @Inject constructor(
         // Process each payslip individually
         payslipBitmaps.forEachIndexed { index, payslipBitmap ->
           _uiState.value = _uiState.value.copy(
-            extractionProgress = 0.6f + (index * 0.2f / payslipBitmaps.size),
+            extractionProgress = 0.3f + (index * 0.4f / payslipBitmaps.size),
             extractionStatus = "Processing payslip ${index + 1} of ${payslipBitmaps.size}..."
           )
           
@@ -1188,11 +1466,46 @@ class SmartLoanViewModel @Inject constructor(
             Log.w(TAG, "❌ Payslip ${index + 1} invalid or failed parsing")
           }
           
-          // Add delay between payslip processing
           delay(1000)
+          LlmChatModelHelper.resetSession(model)
+        }
+
+        // Process loan application forms if available
+        var loanApplicationData = LoanApplicationFormData()
+        if (currentData.loanApplicationImages.isComplete()) {
+          _uiState.value = _uiState.value.copy(
+            extractionProgress = 0.7f,
+            extractionStatus = "Processing loan application form..."
+          )
+
+          val frontFormResult = extractDataFromImage(
+            model = model,
+            bitmap = currentData.loanApplicationImages.frontForm!!,
+            prompt = createLoanApplicationExtractionPrompt()
+          )
           
-          // Reset session after each payslip (important for model state)
-          Log.d(TAG, "🔄 Resetting session after payslip ${index + 1} extraction...")
+          Log.d(TAG, "🔍 Loan application front form extraction: '${frontFormResult.take(200)}${if(frontFormResult.length > 200) "..." else ""}'")
+          
+          delay(1000)
+          LlmChatModelHelper.resetSession(model)
+
+          _uiState.value = _uiState.value.copy(
+            extractionProgress = 0.8f,
+            extractionStatus = "Processing loan application terms..."
+          )
+
+          val backFormResult = extractDataFromImage(
+            model = model,
+            bitmap = currentData.loanApplicationImages.backForm!!,
+            prompt = createLoanApplicationExtractionPrompt()
+          )
+          
+          Log.d(TAG, "🔍 Loan application back form extraction: '${backFormResult.take(200)}${if(backFormResult.length > 200) "..." else ""}'")
+          
+          // Parse loan application data from both results
+          loanApplicationData = parseLoanApplicationDataFromText(frontFormResult + " " + backFormResult)
+          
+          delay(1000)
           LlmChatModelHelper.resetSession(model)
         }
 
@@ -1201,21 +1514,20 @@ class SmartLoanViewModel @Inject constructor(
           extractionStatus = "Finalizing extraction..."
         )
 
-        Log.d(TAG, "=== EXTRACTION RESULTS (Ask Image Approach) ===")
+        Log.d(TAG, "=== EXTRACTION RESULTS (Enhanced Ask Image Approach) ===")
         Log.d(TAG, "Front ID: $frontIdResult")
         Log.d(TAG, "Back ID: $backIdResult")
-        payslipResults.forEachIndexed { index, result ->
-          Log.d(TAG, "Payslip ${index + 1}: ${result.take(100)}...")
-        }
         Log.d(TAG, "Total valid payslips processed: ${allPayslipData.size}")
+        Log.d(TAG, "Loan application data valid: ${loanApplicationData.isValid}")
 
         // Parse the results into structured data
         val idData = parseIdDataFromText(frontIdResult + " " + backIdResult)
 
-        // Create extracted data structure with ALL payslips
+        // Create extracted data structure with ALL documents
         val extractedData = ExtractedApplicationData(
           idCardData = idData,
           payslipData = allPayslipData,
+          loanApplicationFormData = loanApplicationData,
           extractionStartTime = System.currentTimeMillis() - 5000,
           extractionEndTime = System.currentTimeMillis()
         ).calculateOverallConfidence()
@@ -1232,8 +1544,6 @@ class SmartLoanViewModel @Inject constructor(
         withContext(Dispatchers.Main) {
           try {
             Log.d(TAG, "About to call validateApplicationWithBusinessRules() ...")
-            Log.d(TAG, "ruleValidationEngine is null: ${ruleValidationEngine == null}")
-            Log.d(TAG, "loanOfferGenerator is null: ${loanOfferGenerator == null}")
             validateApplicationWithBusinessRules()
             Log.d(TAG, "validateApplicationWithBusinessRules() call completed")
           } catch (e: Exception) {

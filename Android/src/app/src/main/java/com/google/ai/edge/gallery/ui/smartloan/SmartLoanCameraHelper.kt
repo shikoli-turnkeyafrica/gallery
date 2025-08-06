@@ -64,7 +64,9 @@ enum class SmartLoanImageType(val displayName: String) {
   PAYSLIP_1("Payslip 1"),
   PAYSLIP_2("Payslip 2"),
   PAYSLIP_3("Payslip 3"),
-  PAYSLIP_4("Payslip 4")
+  PAYSLIP_4("Payslip 4"),
+  LOAN_APPLICATION_FRONT("Loan Application Front"),
+  LOAN_APPLICATION_BACK("Loan Application Back")
 }
 
 /**
@@ -229,7 +231,8 @@ private fun processImageForType(bitmap: Bitmap, imageType: SmartLoanImageType): 
   // Handle orientation based on image type expectations
   val shouldBePortrait = when (imageType) {
     SmartLoanImageType.PAYSLIP_1, SmartLoanImageType.PAYSLIP_2, 
-    SmartLoanImageType.PAYSLIP_3, SmartLoanImageType.PAYSLIP_4 -> true
+    SmartLoanImageType.PAYSLIP_3, SmartLoanImageType.PAYSLIP_4,
+    SmartLoanImageType.LOAN_APPLICATION_FRONT, SmartLoanImageType.LOAN_APPLICATION_BACK -> true // Documents are usually portrait
     SmartLoanImageType.ID_FRONT, SmartLoanImageType.ID_BACK -> false // IDs are usually landscape
   }
 
@@ -326,5 +329,9 @@ fun getImageCaptureInstructions(imageType: SmartLoanImageType): String {
       "Capture your third payslip. Maintain good lighting and steady hands."
     SmartLoanImageType.PAYSLIP_4 -> 
       "Capture your fourth payslip to complete the requirement."
+    SmartLoanImageType.LOAN_APPLICATION_FRONT -> 
+      "Capture the front page of your completed loan application form. Ensure all fields are clearly visible and readable."
+    SmartLoanImageType.LOAN_APPLICATION_BACK -> 
+      "Capture the back page with terms and conditions. Make sure signatures and dates are clearly visible."
   }
 } 

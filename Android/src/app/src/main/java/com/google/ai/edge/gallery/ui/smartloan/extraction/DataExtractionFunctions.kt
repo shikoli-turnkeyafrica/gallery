@@ -19,6 +19,7 @@ package com.google.ai.edge.gallery.ui.smartloan.extraction
 import android.util.Log
 import com.google.ai.edge.gallery.ui.smartloan.data.IdCardData
 import com.google.ai.edge.gallery.ui.smartloan.data.PayslipData
+import com.google.ai.edge.gallery.ui.smartloan.data.LoanApplicationFormData
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.double
@@ -131,6 +132,108 @@ object DataExtractionFunctions {
                 }
             },
             "required": ["employeeName", "employerName", "grossSalary", "netSalary", "payPeriod", "confidence"]
+        }
+    }
+    """
+    
+    /**
+     * Function declaration for extracting loan application form data.
+     * The AI model will call this function with extracted information from loan application forms.
+     */
+    const val EXTRACT_LOAN_APPLICATION_FUNCTION = """
+    {
+        "name": "extractLoanApplicationData",
+        "description": "Extract structured information from a loan application form",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "title": {
+                    "type": "string",
+                    "description": "Title (Mr., Ms., Mrs., Dr., etc.)"
+                },
+                "firstName": {
+                    "type": "string",
+                    "description": "First name of the applicant"
+                },
+                "middleName": {
+                    "type": "string", 
+                    "description": "Middle name of the applicant"
+                },
+                "lastName": {
+                    "type": "string",
+                    "description": "Last name of the applicant"
+                },
+                "idPassportNumber": {
+                    "type": "string",
+                    "description": "ID or passport number"
+                },
+                "dateOfBirth": {
+                    "type": "string",
+                    "description": "Date of birth in DD-MMM-YYYY format"
+                },
+                "telephoneMobile": {
+                    "type": "string",
+                    "description": "Phone number"
+                },
+                "emailAddress": {
+                    "type": "string",
+                    "description": "Email address"
+                },
+                "residentialAddress": {
+                    "type": "string",
+                    "description": "Residential address"
+                },
+                "townCity": {
+                    "type": "string",
+                    "description": "Town or city"
+                },
+                "bankName": {
+                    "type": "string",
+                    "description": "Bank name"
+                },
+                "accountName": {
+                    "type": "string",
+                    "description": "Bank account name"
+                },
+                "accountNumber": {
+                    "type": "string",
+                    "description": "Bank account number"
+                },
+                "requestedLoanAmount": {
+                    "type": "number",
+                    "description": "Requested loan amount",
+                    "minimum": 0
+                },
+                "requestedInstallmentAmount": {
+                    "type": "number",
+                    "description": "Requested monthly installment amount",
+                    "minimum": 0
+                },
+                "requestedLoanPeriodMonths": {
+                    "type": "number",
+                    "description": "Requested loan period in months",
+                    "minimum": 1
+                },
+                "disbursementMode": {
+                    "type": "string",
+                    "description": "Disbursement mode (M-PESA, TT, RTGS)"
+                },
+                "clientMPesaNumber": {
+                    "type": "string",
+                    "description": "Client M-PESA number if applicable"
+                },
+                "applicantSignatureDate": {
+                    "type": "string",
+                    "description": "Date of applicant signature"
+                },
+                "confidence": {
+                    "type": "number",
+                    "description": "Confidence score between 0.0 and 1.0 based on form completeness and clarity",
+                    "minimum": 0.0,
+                    "maximum": 1.0
+                }
+            },
+            "required": ["firstName", "lastName", "requestedLoanAmount", "confidence"]
         }
     }
     """
@@ -268,8 +371,51 @@ object DataExtractionFunctions {
         """.trimIndent()
     }
     
+        /**
+     * Creates a formatted function call prompt for loan application form extraction
+     */
+    fun createLoanApplicationExtractionPrompt(): String {
+        return """
+        You are an AI that extracts data from loan application forms.
+        
+        Look at this loan application form image and extract the information from all filled fields.
+        
+        Respond with EXACTLY this JSON format (no other text):
+        {
+            "name": "extractLoanApplicationData",
+            "arguments": {
+                "title": "Ms.",
+                "firstName": "first name",
+                "middleName": "middle name", 
+                "lastName": "last name",
+                "idPassportNumber": "ID/passport number",
+                "dateOfBirth": "07-Dec-1971",
+                "telephoneMobile": "phone number",
+                "emailAddress": "email@example.com",
+                "residentialAddress": "residential address",
+                "townCity": "town/city",
+                "bankName": "bank name",
+                "accountName": "account name",
+                "accountNumber": "account number",
+                "requestedLoanAmount": 50000.0,
+                "requestedInstallmentAmount": 1250.0,
+                "requestedLoanPeriodMonths": 48,
+                "disbursementMode": "M-PESA",
+                "clientMPesaNumber": "M-PESA number",
+                "applicantSignatureDate": "date",
+                "confidence": 0.8
+            }
+        }
+        
+        Extract ALL visible information from the form.
+        Use empty strings for fields you cannot read clearly.
+        Convert amounts to numbers (remove commas/currency symbols).
+        Set confidence between 0.1 and 1.0 based on form completeness and image quality.
+        """.trimIndent()
+    }
+    
     /**
-     * Creates a formatted function call prompt for payslip extraction
+* Creates a formatted function call prompt for payslip extraction
      */
     fun createPayslipExtractionPrompt(): String {
         return """
@@ -304,12 +450,87 @@ object DataExtractionFunctions {
     }
     
     /**
+     * Parses loan application form function call response into data object
+     */
+    fun parseLoanApplicationFunction(arguments: JsonObject): LoanApplicationFormData {
+        return try {
+            Log.d(TAG, "=== PARSING LOAN APPLICATION FUNCTION ===")
+            Log.d(TAG, "Arguments received: $arguments")
+            
+            val title = (arguments["title"] as? JsonPrimitive)?.content ?: ""
+            val firstName = (arguments["firstName"] as? JsonPrimitive)?.content ?: ""
+            val middleName = (arguments["middleName"] as? JsonPrimitive)?.content ?: ""
+            val lastName = (arguments["lastName"] as? JsonPrimitive)?.content ?: ""
+            val idPassportNumber = (arguments["idPassportNumber"] as? JsonPrimitive)?.content ?: ""
+            val dateOfBirth = (arguments["dateOfBirth"] as? JsonPrimitive)?.content ?: ""
+            val telephoneMobile = (arguments["telephoneMobile"] as? JsonPrimitive)?.content ?: ""
+            val emailAddress = (arguments["emailAddress"] as? JsonPrimitive)?.content ?: ""
+            val residentialAddress = (arguments["residentialAddress"] as? JsonPrimitive)?.content ?: ""
+            val townCity = (arguments["townCity"] as? JsonPrimitive)?.content ?: ""
+            val bankName = (arguments["bankName"] as? JsonPrimitive)?.content ?: ""
+            val accountName = (arguments["accountName"] as? JsonPrimitive)?.content ?: ""
+            val accountNumber = (arguments["accountNumber"] as? JsonPrimitive)?.content ?: ""
+            
+            val requestedLoanAmount = try {
+                (arguments["requestedLoanAmount"] as? JsonPrimitive)?.double ?: 0.0
+            } catch (e: Exception) { 0.0 }
+            
+            val requestedInstallmentAmount = try {
+                (arguments["requestedInstallmentAmount"] as? JsonPrimitive)?.double ?: 0.0
+            } catch (e: Exception) { 0.0 }
+            
+            val requestedLoanPeriodMonths = try {
+                (arguments["requestedLoanPeriodMonths"] as? JsonPrimitive)?.content?.toIntOrNull() ?: 0
+            } catch (e: Exception) { 0 }
+            
+            val disbursementMode = (arguments["disbursementMode"] as? JsonPrimitive)?.content ?: ""
+            val clientMPesaNumber = (arguments["clientMPesaNumber"] as? JsonPrimitive)?.content ?: ""
+            val applicantSignatureDate = (arguments["applicantSignatureDate"] as? JsonPrimitive)?.content ?: ""
+            
+            val confidence = try {
+                (arguments["confidence"] as? JsonPrimitive)?.float ?: 0.3f
+            } catch (e: Exception) { 0.3f }
+            
+            val result = LoanApplicationFormData(
+                title = title,
+                firstName = firstName,
+                middleName = middleName,
+                lastName = lastName,
+                idPassportNumber = idPassportNumber,
+                dateOfBirth = dateOfBirth,
+                telephoneMobile = telephoneMobile,
+                emailAddress = emailAddress,
+                residentialAddress = residentialAddress,
+                townCity = townCity,
+                bankName = bankName,
+                accountName = accountName,
+                accountNumber = accountNumber,
+                requestedLoanAmount = requestedLoanAmount,
+                requestedInstallmentAmount = requestedInstallmentAmount,
+                requestedLoanPeriodMonths = requestedLoanPeriodMonths,
+                disbursementMode = disbursementMode,
+                clientMPesaNumber = clientMPesaNumber,
+                applicantSignatureDate = applicantSignatureDate,
+                extractionConfidence = confidence
+            ).validate()
+            
+            Log.d(TAG, "Parsed loan application data: $result")
+            Log.d(TAG, "=== END LOAN APPLICATION PARSING ===")
+            result
+        } catch (e: Exception) {
+            Log.e(TAG, "Error parsing loan application function", e)
+            LoanApplicationFormData(extractionConfidence = 0.0f)
+        }
+    }
+
+    /**
      * Gets all available functions for the AI model
      */
     fun getAllFunctions(): List<String> {
         return listOf(
             EXTRACT_ID_CARD_FUNCTION,
-            EXTRACT_PAYSLIP_FUNCTION
+            EXTRACT_PAYSLIP_FUNCTION,
+            EXTRACT_LOAN_APPLICATION_FUNCTION
         )
     }
     

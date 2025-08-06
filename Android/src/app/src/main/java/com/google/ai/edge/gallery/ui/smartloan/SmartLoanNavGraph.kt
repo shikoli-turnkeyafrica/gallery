@@ -29,6 +29,7 @@ object SmartLoanRoutes {
   const val START_APPLICATION = "smart_loan_start"
   const val ID_CAPTURE = "smart_loan_id_capture"
   const val PAYSLIP_CAPTURE = "smart_loan_payslip_capture"
+  const val LOAN_APPLICATION_CAPTURE = "smart_loan_application_capture"
   const val VALIDATION_PROGRESS = "smart_loan_validation"
   const val VALIDATION_REPORT = "smart_loan_validation_report"
   const val OFFER = "smart_loan_offer"
@@ -74,6 +75,16 @@ fun SmartLoanNavHost(
     
     composable(route = SmartLoanRoutes.PAYSLIP_CAPTURE) {
       PayslipCaptureScreen(
+        onContinue = {
+          navController.navigate(SmartLoanRoutes.LOAN_APPLICATION_CAPTURE)
+        },
+        onNavigateUp = { navController.navigateUp() },
+        viewModel = viewModel,
+      )
+    }
+    
+    composable(route = SmartLoanRoutes.LOAN_APPLICATION_CAPTURE) {
+      LoanApplicationCaptureScreen(
         onContinue = {
           navController.navigate(SmartLoanRoutes.VALIDATION_PROGRESS)
         },

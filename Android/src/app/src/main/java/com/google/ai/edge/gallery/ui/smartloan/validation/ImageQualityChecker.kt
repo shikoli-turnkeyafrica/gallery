@@ -243,6 +243,26 @@ object ImageQualityChecker {
           suggestions.add("Move closer to the document or use higher camera resolution")
         }
       }
+      
+      "loan_application_front", "loan_application_back" -> {
+        // Loan application forms are typically portrait orientation
+        if (bitmap.width > bitmap.height) {
+          issues.add("Loan application form appears to be in landscape orientation")
+          suggestions.add("Rotate phone to portrait mode for better capture")
+        }
+        
+        // Check for sufficient resolution for form field text
+        if (bitmap.width < 1400 || bitmap.height < 1800) {
+          issues.add("Resolution may be too low for form fields to be readable")
+          suggestions.add("Move closer to the document and ensure good lighting for clear text capture")
+        }
+        
+        // Check for sufficient contrast (forms should have clear text and field boundaries)
+        if (!hasGoodContrast(bitmap)) {
+          issues.add("Low contrast detected - form fields may not be clearly visible")
+          suggestions.add("Ensure good lighting and avoid shadows on the form")
+        }
+      }
     }
     
     return DocumentValidationResult(

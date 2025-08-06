@@ -271,13 +271,24 @@ fun ValidationProgressScreen(
         )
         ProcessingStep(
           title = "Extracting Payslip Data",
-          isCompleted = uiState.extractionProgress > 0.9f,
-          isActive = uiState.extractionProgress in 0.3f..0.9f,
+          isCompleted = uiState.extractionProgress > 0.7f,
+          isActive = uiState.extractionProgress in 0.3f..0.7f,
           details = uiState.extractedData?.let { data ->
             val validPayslips = data.payslipData.count { it.isValid }
             if (validPayslips > 0) "✓ Processed $validPayslips payslip(s)" else null
           }
         )
+        // Show loan application processing step only if loan forms were captured
+        if (uiState.applicationData.loanApplicationImages.isComplete()) {
+          ProcessingStep(
+            title = "Processing Loan Application Form",
+            isCompleted = uiState.extractionProgress > 0.8f,
+            isActive = uiState.extractionProgress in 0.7f..0.8f,
+            details = uiState.extractedData?.loanApplicationFormData?.let { loanApp ->
+              if (loanApp.isValid) "✓ Extracted: ${loanApp.getFullName()}" else null
+            }
+          )
+        }
         ProcessingStep(
           title = "Validating Extracted Data",
           isCompleted = uiState.extractionProgress >= 1f,
